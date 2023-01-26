@@ -6,23 +6,30 @@ use tokio::sync::mpsc;
 use tonic::{Request, Response, Status};
 use tokio_stream::wrappers::ReceiverStream;
 
-pub mod route{
-    tonic::include_proto!("route");
+pub mod oxidize_proto{
+    tonic::include_proto!("oxidize_proto");
 
-    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("route_descriptor");
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("chat_descriptor");
 }
-use route::route_server::{Route, RouteServer};
-use route::{User, Missive, OperationSuccess};
+use oxidize_proto::chat_server::{Chat, ChatServer};
+use oxidize_proto::{User, Missive, OperationSuccess, Test};
 
 #[derive(Debug)]
-struct RouteService;
+struct ChatService;
 
 #[tonic::async_trait]
-impl Route for RouteService{
+impl Chat for ChatService{
     async fn send_message(&self, message: Request<Missive>) -> Result<Response<OperationSuccess>, Status>{
         let reply = OperationSuccess{
             success: true,
             error: message.into_inner().message,
+        };
+        Ok(Response::new(reply))
+    }
+
+    async fn test_run(&self, tester: Request<Test>) -> Result<Response<Test>, Status>{
+        let reply = Test{
+            msg: tester.into_inner().msg,
         };
         Ok(Response::new(reply))
     }
@@ -38,9 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Listening on {}", addr);
 
-    let rt = RouteService{};
+    let rt = ChatService{};
 
-    let svc = RouteServer::new(rt);
+    let svc = ChatServer::new(rt);
 
     Server::builder()
     .add_service(reflection)

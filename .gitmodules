@@ -1,0 +1,3 @@
+[submodule "oxidize_protos"]
+	path = oxidize_protos
+	url = git@github.com:brandon515/oxidize_protos.git
