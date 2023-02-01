@@ -1,58 +1,87 @@
-use futures_core::Stream;
-use tonic::transport::Server;
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tonic::{Request, Response, Status};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::net::TcpListener;
+use tokio::io::{
+    AsyncReadExt,
+    AsyncWriteExt,
+};
 
-pub mod oxidize_proto{
-    tonic::include_proto!("oxidize_proto");
-
-    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("chat_descriptor");
-}
-use oxidize_proto::chat_server::{Chat, ChatServer};
-use oxidize_proto::{User, Missive, OperationSuccess, Test};
-
-#[derive(Debug)]
-struct ChatService;
-
-#[tonic::async_trait]
-impl Chat for ChatService{
-    async fn send_message(&self, message: Request<Missive>) -> Result<Response<OperationSuccess>, Status>{
-        let reply = OperationSuccess{
-            success: true,
-            error: message.into_inner().message,
-        };
-        Ok(Response::new(reply))
-    }
-
-    async fn test_run(&self, tester: Request<Test>) -> Result<Response<Test>, Status>{
-        let reply = Test{
-            msg: tester.into_inner().msg,
-        };
-        Ok(Response::new(reply))
-    }
-}
+use std::path::Path;
+use oxidize::crypto::{
+    AsymKey,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let reflection = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(route::FILE_DESCRIPTOR_SET)
-        .build()
-        .unwrap();
-    let addr = "142.93.202.81:10000".parse().unwrap();
+    const SECRET_FILENAME: &str = "./keys/ServerKey";
+    const PUBLIC_FILENAME: &str = "./keys/ServerKey.pub";
+    let asym_encryption = match Path::new(&SECRET_FILENAME).exists(){
+        true => {
+            let password = rpassword::prompt_password("Password: ").unwrap();
+            match AsymKey::from_files(PUBLIC_FILENAME, SECRET_FILENAME, password){
+                Ok(r) => r,
+                Err(e) => {
+                    println!("Error loading private keys\nError: {:?}", e);
+                    panic!();
+                },
+            }
+        },
+        false => {
+            println!("Key files not found, creating new ones.");
+            println!("***************************************");
+            println!("*  THIS WILL OVERWRITE ANY EXISTING   *");
+            println!("*  PUBLIC KEY FILES IN THE FOLDER     *");
+            println!("***************************************");
+            let mut password = rpassword::prompt_password("New Password: ").unwrap();
+            let mut confirm_password = rpassword::prompt_password("Confirm Password: ").unwrap();
+            while password != confirm_password {
+                println!("Passwords do not match");
+                password = rpassword::prompt_password("New Password: ").unwrap();
+                confirm_password = rpassword::prompt_password("Confirm Password: ").unwrap();
+            }
+            let key_new = AsymKey::from_rng().unwrap();
+            key_new.to_files(PUBLIC_FILENAME, SECRET_FILENAME, password).unwrap();
+            key_new
+        },
+    };
+    let msg = b"tester testing test".to_vec();
 
-    println!("Listening on {}", addr);
+    let encrypted_msg = asym_encryption.encrypt(&msg).unwrap();
+    if msg == encrypted_msg{
+        panic!("Public key failed to encrypt");
+    }
 
-    let rt = ChatService{};
+    let decrypted_msg = asym_encryption.decrypt(&encrypted_msg).unwrap();
+    if msg != decrypted_msg{
+        panic!("Private key failed to decrypt");
+    }
 
-    let svc = ChatServer::new(rt);
+    let addr = "142.93.202.81:10000";
+    let listener = TcpListener::bind(addr).await?;
+    println!("Server is listening on {}", addr);
+    /*loop{
+        println!("herro");
+    }*/
+    
+    loop{
+        let (mut socket, _) = listener.accept().await?;
 
-    Server::builder()
-    .add_service(reflection)
-    .add_service(svc)
-    .serve(addr).await?;
+        tokio::spawn(async move {
+            let mut buf = [0; 1024];
 
-    Ok(())
+            loop{
+                let n = match socket.read(&mut buf).await{
+                    Ok(n) if n == 0 => return,
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("Failure: {:?}", e);
+                        return;
+                    }
+                };
+
+                if let Err(e) = socket.write_all(&buf[0..n]).await{
+                    println!("Failure: {:?}", e);
+                    return;
+                }
+            }
+        });
+    }
 }
