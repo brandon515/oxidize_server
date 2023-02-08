@@ -5,14 +5,24 @@ use tokio::io::{
 };
 
 use std::path::Path;
-use oxidize::crypto::{
-    AsymKey,
+use oxidize::{
+    chat::{
+        msg::MsgType,
+    },
+    crypto::{
+        AsymKey,
+        SymKey, 
+        SymEncryptedMsg,
+    },
 };
+
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const SECRET_FILENAME: &str = "./keys/ServerKey";
     const PUBLIC_FILENAME: &str = "./keys/ServerKey.pub";
+    const RSA_BITS: usize = 2048;
     let asym_encryption = match Path::new(&SECRET_FILENAME).exists(){
         true => {
             let password = rpassword::prompt_password("Password: ").unwrap();
@@ -25,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         false => {
-            println!("Key files not found, creating new ones.");
+            println!("Private key file not found, creating new ones.");
             println!("***************************************");
             println!("*  THIS WILL OVERWRITE ANY EXISTING   *");
             println!("*  PUBLIC KEY FILES IN THE FOLDER     *");
@@ -37,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 password = rpassword::prompt_password("New Password: ").unwrap();
                 confirm_password = rpassword::prompt_password("Confirm Password: ").unwrap();
             }
-            let key_new = AsymKey::from_rng().unwrap();
+            let key_new = AsymKey::from_rng(RSA_BITS).unwrap();
             key_new.to_files(PUBLIC_FILENAME, SECRET_FILENAME, password).unwrap();
             key_new
         },
@@ -57,9 +67,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "142.93.202.81:10000";
     let listener = TcpListener::bind(addr).await?;
     println!("Server is listening on {}", addr);
-    /*loop{
-        println!("herro");
-    }*/
     
     loop{
         let (mut socket, _) = listener.accept().await?;
