@@ -22,8 +22,6 @@ use std::{
     sync::Arc,
 };
 
-use sqlite::ConnectionWithFullMutex;
-
 pub mod msg;
 
 pub struct Client{
@@ -59,15 +57,15 @@ impl Client{
     }
 }
 
-pub struct User<'a>{
+pub struct User{
     asym_key: Option<AsymKey>,
     sym_key: Option<SymKey>,
     server_key: Arc<Mutex<AsymKey>>,
     client: RefCell<Client>,
-    database: Database<'a>,
+    database: Database,
 }
 
-impl User<'_>{
+impl User{
     pub fn new(stream: TcpStream, server_key: Arc<Mutex<AsymKey>>, db: String) -> Self{
         User { 
             asym_key: None, 
