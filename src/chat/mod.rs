@@ -12,13 +12,11 @@ use crate::{
         SymKey,
         self,
     },
-    database::Database,
+    chat::msg::ErrorCode,
 };
 
 use std::{
-    cell::{
-        RefCell
-    }, 
+    cell::RefCell, 
     sync::Arc,
 };
 
@@ -62,7 +60,6 @@ pub struct User{
     sym_key: Option<SymKey>,
     server_key: Arc<Mutex<AsymKey>>,
     client: RefCell<Client>,
-    database: Database,
 }
 
 impl User{
@@ -72,7 +69,6 @@ impl User{
             sym_key: None, 
             server_key,
             client: RefCell::new(Client::new(stream)),
-            database: Database::new(db)
         }
     }
     pub async fn handshake(&self) -> Result<(), crypto::Error>{
@@ -86,11 +82,13 @@ impl User{
         };
         let init_msg: msg::InitialMessage = match serde_json::from_slice(&msg){
             Ok(r) => r,
-            Err(e) => return Err(crypto::Error::Other(format!("{:?}", e))),
+            Err(e) => {
+                let error_message = ErrorCode::new(0, format!("{:?}", e));
+                let error_json = serde_json::to_string(&error_message).unwrap();
+                self.client.borrow_mut().send(error_json.into_bytes()).await.unwrap();
+                return Err(crypto::Error::Other(format!("{:?}", e)));
+            }
         };
-        unimplemented!();
-    }
-    pub async fn tick(&self) -> Result<bool, tokio::io::Error>{
         unimplemented!();
     }
 }

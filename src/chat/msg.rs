@@ -3,10 +3,24 @@ use serde::{
     Deserialize,
 };
 
-use crate::crypto::SymEncryptedMsg;
+
+#[derive(Serialize, Deserialize)]
+pub enum MsgType{
+    ErrorCode,
+    MasterMessage,
+    InitialMessage,
+    PublicKeyRequest,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SymEncryptedMsg{
+    pub msg: Vec<u8>,
+    pub nonce: Vec<u8>,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct MasterMessage{
+    pub kind: MsgType,
     pub user: String,
     pub machine: Vec<u8>,
     pub en_msg: SymEncryptedMsg,
@@ -15,6 +29,7 @@ pub struct MasterMessage{
 impl MasterMessage{
     pub fn new(user: String, machine: Vec<u8>, en_msg: SymEncryptedMsg) -> Self{
         MasterMessage { 
+            kind: MsgType::MasterMessage,
             user, 
             machine, 
             en_msg, 
@@ -22,11 +37,6 @@ impl MasterMessage{
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum MsgType{
-    InitialMessage,
-    PublicKeyRequest,
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct InitialMessage{
@@ -53,5 +63,22 @@ pub struct PublicKeyRequest {
 impl PublicKeyRequest{
     pub fn new() -> Self{
         PublicKeyRequest { kind: MsgType::PublicKeyRequest }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ErrorCode{
+    kind: MsgType,
+    error_number: i32,
+    plain_text: String,
+}
+
+impl ErrorCode{
+    pub fn new(error_number: i32, plain_text: String) -> Self{
+        ErrorCode { 
+            kind: MsgType::ErrorCode,
+            error_number, 
+            plain_text, 
+        }
     }
 }
