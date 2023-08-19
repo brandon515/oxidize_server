@@ -1,17 +1,19 @@
 use tokio::net::TcpListener;
-use tokio::io::{
-    AsyncReadExt,
-    AsyncWriteExt,
-};
+use tokio::sync::Mutex;
 
 use std::path::Path;
-use oxidize::crypto::AsymKey;
+use std::sync::Arc;
+use oxidize::{
+    crypto::AsymKey,
+    chat::User,
+};
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const SECRET_FILENAME: &str = "./keys/ServerKey";
     const PUBLIC_FILENAME: &str = "./keys/ServerKey.pub";
+    const DATABASE_FILENAME: &str = "./keys/users.db";
     const RSA_BITS: usize = 2048;
     let asym_encryption = match Path::new(&SECRET_FILENAME).exists(){
         true => {
@@ -42,30 +44,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             key_new
         },
     };
-    let msg = b"tester testing test".to_vec();
-
-    let encrypted_msg = asym_encryption.encrypt(&msg).unwrap();
-    if msg == encrypted_msg{
-        panic!("Public key failed to encrypt");
-    }
-
-    let decrypted_msg = asym_encryption.decrypt(&encrypted_msg).unwrap();
-    if msg != decrypted_msg{
-        panic!("Private key failed to decrypt");
-    }
-
+    let asym_key = Arc::new(Mutex::new(asym_encryption));
     let addr = "142.93.202.81:10000";
     let listener = TcpListener::bind(addr).await?;
     println!("Server is listening on {}", addr);
     
     loop{
-        let (mut socket, _) = listener.accept().await?;
+        let (socket, _) = listener.accept().await?;
 
+        let new_key = Arc::clone(&asym_key);
         tokio::spawn(async move {
-            let mut buf = [0; 1024];
+            let mut user = User::new(socket, new_key, DATABASE_FILENAME.to_string());
+
+            user.handshake().await.unwrap();
 
             loop{
-                let n = match socket.read(&mut buf).await{
+                /*let n = match socket.read(&mut buf).await{
                     Ok(n) if n == 0 => return,
                     Ok(n) => n,
                     Err(e) => {
@@ -77,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Err(e) = socket.write_all(&buf[0..n]).await{
                     println!("Failure: {:?}", e);
                     return;
-                }
+                }*/
             }
         });
     }

@@ -18,10 +18,7 @@ use crate::{
     database::{Database, self},
 };
 
-use std::{
-    cell::RefCell, 
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use rand::distributions::{
     Alphanumeric,
@@ -45,6 +42,7 @@ pub mod msg;
 pub struct Client{
     stream: TcpStream,
 }
+
 
 impl Client{
     pub fn new(stream_new: TcpStream) -> Self {
@@ -79,7 +77,7 @@ pub struct User{
     asym_key: Option<AsymKey>,
     sym_key: Option<SymKey>,
     server_key: Arc<Mutex<AsymKey>>,
-    client: RefCell<Client>,
+    client: Client,
     database: Database,
 }
 
@@ -89,14 +87,14 @@ impl User{
             asym_key: None, 
             sym_key: None, 
             server_key,
-            client: RefCell::new(Client::new(stream)),
+            client: Client::new(stream),
             database: Database::new(db),
         }
     }
 
     pub async fn handshake(&mut self) -> Result<(), Error>{
         // This assumes the server public key is given elsewhere, likely through the invite string
-        let en_msg = match self.client.borrow_mut().recieve().await{
+        let en_msg = match self.client.recieve().await{
             Ok(r) => r,
             Err(e) => return Err(Error::ConnectionError(format!("{:?}", e))),
         };
@@ -109,7 +107,7 @@ impl User{
             Err(e) => {
                 let error_message = ErrorCode::new(0, format!("{:?}", e));
                 let error_json = serde_json::to_string(&error_message).unwrap();
-                self.client.borrow_mut().send(error_json.into_bytes()).await.unwrap();
+                self.client.send(error_json.into_bytes()).await.unwrap();
                 return Err(Error::InvalidMessage(format!("{:?}", e)));
             }
         };
@@ -131,8 +129,8 @@ impl User{
                 if e == database::Error::NoMachine{ // Get the new public key from the client
                     let pub_key_req = msg::PublicKeyRequest::new();
                     let pub_key_json = serde_json::to_string(&pub_key_req).unwrap();
-                    self.client.borrow_mut().send(pub_key_json.into_bytes()).await.unwrap();
-                    let pub_key_response = match self.client.borrow_mut().recieve().await{
+                    self.client.send(pub_key_json.into_bytes()).await.unwrap();
+                    let pub_key_response = match self.client.recieve().await{
                         Ok(r) => r,
                         Err(e) => return Err(Error::ConnectionError(format!("{:?}", e))),
                     };
@@ -145,7 +143,7 @@ impl User{
                         Err(e) => {
                             let error_message = ErrorCode::new(1, format!("{:?}", e));
                             let error_json = serde_json::to_string(&error_message).unwrap();
-                            self.client.borrow_mut().send(error_json.into_bytes()).await.unwrap();
+                            self.client.send(error_json.into_bytes()).await.unwrap();
                             return Err(Error::InvalidMessage(format!("{:?}", e)));
                         }
                     };
@@ -164,9 +162,9 @@ impl User{
         let sec_json = serde_json::to_string(&sec_chal).unwrap();
         if let Some(key) = &self.asym_key{
             let sec_encrypt = key.encrypt(&sec_json.into_bytes()).unwrap();
-            self.client.borrow_mut().send(sec_encrypt).await.unwrap();
+            self.client.send(sec_encrypt).await.unwrap();
         }
-        let sec_response = match self.client.borrow_mut().recieve().await{
+        let sec_response = match self.client.recieve().await{
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::ConnectionError(format!("{:?}", e)));
@@ -183,7 +181,7 @@ impl User{
             if sec_chal.challenge_text != sec_json.challenge_text{ // uh oh, the user didn't decode the challenge text correctly
                 let sec_error = msg::ErrorCode::new(3, "Security test mismatch".to_string());
                 let error_json = serde_json::to_string(&sec_error).unwrap();
-                self.client.borrow_mut().send(error_json.into_bytes()).await.unwrap();
+                self.client.send(error_json.into_bytes()).await.unwrap();
                 return Err(Error::SecurityChallengeMisMatch);
             }
         }
@@ -195,7 +193,7 @@ impl User{
         let sym_json = serde_json::to_string(&sym_exchange).unwrap();
         if let Some(asm_key) = &self.asym_key{
             let sym_en = asm_key.encrypt(&sym_json.into_bytes()).unwrap();
-            self.client.borrow_mut().send(sym_en).await.unwrap();
+            self.client.send(sym_en).await.unwrap();
         }
         self.sym_key = Some(sym_key);
         Ok(())
