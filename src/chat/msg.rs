@@ -12,6 +12,7 @@ pub enum MsgType{
     PublicKeyRequest,
     PublicKeyResponse,
     SecurityChallenge,
+    SymKeyExchange,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,6 +66,21 @@ pub struct PublicKeyRequest {
 impl PublicKeyRequest{
     pub fn new() -> Self{
         PublicKeyRequest { kind: MsgType::PublicKeyRequest }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SymKeyExchange {
+    pub kind: MsgType,
+    pub sym_key: String,
+}
+
+impl SymKeyExchange{
+    pub fn new(sym_key: String) -> SymKeyExchange{
+        SymKeyExchange { 
+            kind: MsgType::SymKeyExchange, 
+            sym_key: sym_key, 
+        }
     }
 }
 

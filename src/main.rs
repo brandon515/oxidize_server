@@ -5,15 +5,8 @@ use tokio::io::{
 };
 
 use std::path::Path;
-use oxidize::{
-    chat::msg::SymEncryptedMsg,
-    crypto::{
-        AsymKey,
-        SymKey,
-    },
-};
+use oxidize::crypto::AsymKey;
 
-use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
