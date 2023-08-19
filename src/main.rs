@@ -6,13 +6,10 @@ use tokio::io::{
 
 use std::path::Path;
 use oxidize::{
-    chat::{
-        msg::MsgType,
-    },
+    chat::msg::SymEncryptedMsg,
     crypto::{
         AsymKey,
-        SymKey, 
-        SymEncryptedMsg,
+        SymKey,
     },
 };
 

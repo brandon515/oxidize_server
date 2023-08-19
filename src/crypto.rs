@@ -32,10 +32,7 @@ use std::{
         Read,
     },
 };
-use serde::{
-    Serialize,
-    Deserialize,
-};
+use crate::chat::msg::SymEncryptedMsg;
 #[derive(Debug)]
 pub enum Error{
     PubKeyError(spki::Error),
@@ -172,19 +169,13 @@ impl AsymKey{
             pub_key: pub_key_new,
         })
     }
-    pub fn from_public_key(pub_key: Vec<u8>) -> Self{
-        let pem_data = String::from_utf8(pub_key).unwrap();
+    pub fn from_public_key(pub_key: &String) -> Self{
+        //let pem_data = String::from_utf8(pub_key).unwrap();
         AsymKey { 
             priv_key: None, 
-            pub_key: RsaPublicKey::from_public_key_pem(&pem_data).unwrap(),
+            pub_key: RsaPublicKey::from_public_key_pem(pub_key).unwrap(),
         }   
     }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SymEncryptedMsg{
-    pub msg: Vec<u8>,
-    pub nonce: Vec<u8>,
 }
 
 pub struct SymKey{
@@ -201,14 +192,12 @@ impl SymKey{
             key: key_new,
         }
     }
-
     pub fn from_key(existing_key: Vec<u8>) -> Self{
         SymKey { 
             cipher: Aes256Gcm::new(GenericArray::from_slice(&existing_key)), 
             key: existing_key,
         }
     }
-
     pub fn encrypt(&self, data: &Vec<u8>) -> Result<SymEncryptedMsg, aead::Error>{
         let csprng = ChaCha20Rng::from_entropy();
         let nonce_new = Aes256Gcm::generate_nonce(csprng);
@@ -218,7 +207,6 @@ impl SymKey{
             nonce: nonce_new.to_vec(), 
         })
     }
-
     pub fn decrypt(&self, en_msg: &SymEncryptedMsg) -> Result<Vec<u8>, aead::Error>{
         let nonce = GenericArray::from_slice(en_msg.nonce.as_ref());
         self.cipher.decrypt(nonce, en_msg.msg.as_ref())

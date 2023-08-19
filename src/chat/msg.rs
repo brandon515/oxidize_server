@@ -10,6 +10,8 @@ pub enum MsgType{
     MasterMessage,
     InitialMessage,
     PublicKeyRequest,
+    PublicKeyResponse,
+    SecurityChallenge,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,9 +42,9 @@ impl MasterMessage{
 
 #[derive(Serialize, Deserialize)]
 pub struct InitialMessage{
-    kind: MsgType,
-    username: String,
-    machine: String,
+    pub kind: MsgType,
+    pub username: String,
+    pub machine: String,
 }
 
 impl InitialMessage{
@@ -57,7 +59,7 @@ impl InitialMessage{
 
 #[derive(Serialize, Deserialize)]
 pub struct PublicKeyRequest {
-    kind: MsgType,
+    pub kind: MsgType,
 }
 
 impl PublicKeyRequest{
@@ -67,10 +69,31 @@ impl PublicKeyRequest{
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct PublicKeyResponse {
+    pub kind: MsgType,
+    pub pub_key: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SecurityChallenge {
+    pub kind: MsgType,
+    pub challenge_text: String,
+}
+
+impl SecurityChallenge{
+    pub fn new(challenge_text: String) -> SecurityChallenge{
+        SecurityChallenge{
+            kind: MsgType::SecurityChallenge,
+            challenge_text,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct ErrorCode{
     kind: MsgType,
-    error_number: i32,
-    plain_text: String,
+    pub error_number: i32,
+    pub plain_text: String,
 }
 
 impl ErrorCode{
