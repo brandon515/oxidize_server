@@ -4,14 +4,16 @@ use serde::{
 };
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum MsgType{
     ErrorCode,
-    MasterMessage,
+    PeerMessage,
+    ServerMessage,
     InitialMessage,
     PublicKeyRequest,
     PublicKeyResponse,
     SecurityChallenge,
+    SecurityResponse,
     SymKeyExchange,
 }
 
@@ -22,17 +24,34 @@ pub struct SymEncryptedMsg{
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MasterMessage{
+pub struct ServerMessage{
+    pub kind: MsgType,
+    pub data: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+impl ServerMessage{
+    pub fn new(data: Vec<u8>, signature: Vec<u8>) -> Self{
+        ServerMessage { 
+            kind: MsgType::ServerMessage,
+            data,
+            signature,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PeerMessage{
     pub kind: MsgType,
     pub user: String,
-    pub machine: Vec<u8>,
+    pub machine: String,
     pub en_msg: SymEncryptedMsg,
 }
 
-impl MasterMessage{
-    pub fn new(user: String, machine: Vec<u8>, en_msg: SymEncryptedMsg) -> Self{
-        MasterMessage { 
-            kind: MsgType::MasterMessage,
+impl PeerMessage{
+    pub fn new(user: String, machine: String, en_msg: SymEncryptedMsg) -> Self{
+        PeerMessage { 
+            kind: MsgType::PeerMessage,
             user, 
             machine, 
             en_msg, 
@@ -41,7 +60,7 @@ impl MasterMessage{
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct InitialMessage{
     pub kind: MsgType,
     pub username: String,
@@ -72,11 +91,11 @@ impl PublicKeyRequest{
 #[derive(Serialize, Deserialize)]
 pub struct SymKeyExchange {
     pub kind: MsgType,
-    pub sym_key: String,
+    pub sym_key: Vec<u8>,
 }
 
 impl SymKeyExchange{
-    pub fn new(sym_key: String) -> SymKeyExchange{
+    pub fn new(sym_key: Vec<u8>) -> SymKeyExchange{
         SymKeyExchange { 
             kind: MsgType::SymKeyExchange, 
             sym_key: sym_key, 
@@ -93,14 +112,31 @@ pub struct PublicKeyResponse {
 #[derive(Serialize, Deserialize)]
 pub struct SecurityChallenge {
     pub kind: MsgType,
-    pub challenge_text: String,
+    pub challenge_text: Vec<u8>,
 }
 
 impl SecurityChallenge{
-    pub fn new(challenge_text: String) -> SecurityChallenge{
+    pub fn new(challenge_text: Vec<u8>) -> SecurityChallenge{
         SecurityChallenge{
             kind: MsgType::SecurityChallenge,
             challenge_text,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SecurityResponse {
+    pub kind: MsgType,
+    pub challenge_text: String,
+    pub signature: Vec<u8>
+}
+
+impl SecurityResponse{
+    pub fn new(challenge_text: String, signature: Vec<u8>) -> SecurityResponse{
+        SecurityResponse{
+            kind: MsgType::SecurityResponse,
+            challenge_text,
+            signature,
         }
     }
 }

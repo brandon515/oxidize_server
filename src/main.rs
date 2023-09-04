@@ -1,12 +1,21 @@
+use der::DateTime;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use base64::{
+    Engine as _, 
+    engine::general_purpose, 
+};
 
-use std::path::Path;
+use std::{
+    path::Path, 
+    time::SystemTime
+};
 use std::sync::Arc;
 use oxidize::{
     crypto::AsymKey,
     chat::User,
 };
+use local_ip_address::local_ip;
 
 
 #[tokio::main]
@@ -15,6 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const PUBLIC_FILENAME: &str = "./keys/ServerKey.pub";
     const DATABASE_FILENAME: &str = "./keys/users.db";
     const RSA_BITS: usize = 2048;
+    const PORT: &str = "10000";
+    let ip = local_ip().unwrap();
     let asym_encryption = match Path::new(&SECRET_FILENAME).exists(){
         true => {
             let password = rpassword::prompt_password("Password: ").unwrap();
@@ -45,12 +56,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
     let asym_key = Arc::new(Mutex::new(asym_encryption));
-    let addr = "142.93.202.81:10000";
+    let mut addr = ip.to_string();
+    let mut invite_string = addr.clone();
+    invite_string.push_str("\n");
+    invite_string.push_str(PORT);
+    invite_string.push_str("\n");
+    addr.push_str(":");
+    addr.push_str(PORT);
     let listener = TcpListener::bind(addr).await?;
-    println!("Server is listening on {}", addr);
+    let pub_pem = asym_key.lock().await.get_public_key().unwrap();
+    invite_string.push_str(&pub_pem);
+    let invite_base64 = general_purpose::STANDARD.encode(invite_string.as_bytes());
+    println!("Server is listening on {:?}", listener.local_addr().unwrap());
+    println!("Invite String is {}", invite_base64);
     
     loop{
-        let (socket, _) = listener.accept().await?;
+        let (socket, addr) = listener.accept().await?;
+        let dt = DateTime::from_system_time(SystemTime::now()).unwrap();
+        println!("Connection Establish with {:?} at {}", addr, dt.to_string());
 
         let new_key = Arc::clone(&asym_key);
         tokio::spawn(async move {

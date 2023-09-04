@@ -13,11 +13,15 @@ use rsa::{
     RsaPublicKey,
     RsaPrivateKey,
     Oaep,
-    sha2::Sha256, pkcs8::DecodePublicKey,
+    sha2::{
+        Sha256,
+        Digest,
+    }, 
     pkcs8::{
         spki, 
         DecodePrivateKey, 
         EncodePublicKey, 
+        DecodePublicKey,
         EncodePrivateKey,
         LineEnding,
     },
@@ -38,8 +42,10 @@ pub enum Error{
     IOError(std::io::Error),
     PrivDerError(rsa::pkcs8::Error),
     PrivKeyError(rsa::errors::Error),
-    EncryptionError(rsa::errors::Error),
-    DecryptionError(rsa::errors::Error),
+    AsymEncryptionError(rsa::errors::Error),
+    SymEncryptionError(aead::Error),
+    AsymDecryptionError(rsa::errors::Error),
+    SymDecryptionError(aead::Error),
     SigningError(rsa::errors::Error),
     VerificationError(rsa::errors::Error),
     PrivKeyMissing(),
@@ -66,14 +72,20 @@ impl AsymKey{
         };
         let mut csprng = ChaCha20Rng::from_entropy();
         let padding = Pkcs1v15Sign::new::<Sha256>();
-        match priv_key.sign_with_rng(&mut csprng, padding, data.as_slice()){
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        let dig = hasher.finalize();
+        match priv_key.sign_with_rng(&mut csprng, padding, &dig){
             Ok(r) => Ok(r),
             Err(e) => Err(Error::SigningError(e)),
         }
     }
     pub fn verify(&self, data: &Vec<u8>, signature: &Vec<u8>) -> Result<bool, Error>{
         let padding = Pkcs1v15Sign::new::<Sha256>();
-        match self.pub_key.verify(padding, data.as_slice(), signature.as_slice()){
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let dig = hasher.finalize();
+        match self.pub_key.verify(padding, &dig, signature.as_slice()){
             Ok(_) => Ok(true),
             Err(rsa::errors::Error::Verification) => Ok(false),
             Err(e) => Err(Error::VerificationError(e)), 
@@ -84,7 +96,7 @@ impl AsymKey{
         let padding = Oaep::new::<rsa::sha2::Sha256>();
         match self.pub_key.encrypt(&mut csprng, padding, data.as_slice()){
             Ok(r) => Ok(r),
-            Err(e) => Err(Error::EncryptionError(e))
+            Err(e) => Err(Error::AsymEncryptionError(e))
         }
     }
     pub fn decrypt(&self, data: &Vec<u8>) -> Result<Vec<u8>, Error>{
@@ -97,7 +109,7 @@ impl AsymKey{
         let padding = Oaep::new::<rsa::sha2::Sha256>();
         match priv_key.decrypt(padding, data.as_slice()){
             Ok(r) => Ok(r),
-            Err(e) => Err(Error::DecryptionError(e)),
+            Err(e) => Err(Error::AsymDecryptionError(e)),
         }
     }
     pub fn from_rng(rsa_bits: usize) -> Result<Self, Error>{
@@ -197,17 +209,26 @@ impl SymKey{
             key: existing_key,
         }
     }
-    pub fn encrypt(&self, data: &Vec<u8>) -> Result<SymEncryptedMsg, aead::Error>{
+    pub fn encrypt(&self, data: &Vec<u8>) -> Result<SymEncryptedMsg, Error>{
         let csprng = ChaCha20Rng::from_entropy();
         let nonce_new = Aes256Gcm::generate_nonce(csprng);
-        let msg_new = self.cipher.encrypt(&nonce_new, data.as_ref())?;
-        Ok(SymEncryptedMsg { 
+        let msg_new = match self.cipher.encrypt(&nonce_new, data.as_ref()){
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::SymEncryptionError(e));
+            }
+        };
+        let msg = SymEncryptedMsg { 
             msg: msg_new, 
             nonce: nonce_new.to_vec(), 
-        })
+        };
+        Ok(msg)
     }
-    pub fn decrypt(&self, en_msg: &SymEncryptedMsg) -> Result<Vec<u8>, aead::Error>{
+    pub fn decrypt(&self, en_msg: &SymEncryptedMsg) -> Result<Vec<u8>, Error>{
         let nonce = GenericArray::from_slice(en_msg.nonce.as_ref());
-        self.cipher.decrypt(nonce, en_msg.msg.as_ref())
+        match self.cipher.decrypt(nonce, en_msg.msg.as_ref()){
+            Ok(r) => Ok(r),
+            Err(e) => Err(Error::SymDecryptionError(e)),
+        }
     }
 }
